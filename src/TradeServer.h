@@ -1,7 +1,7 @@
 // TradeServer.h
 // A minimal epoll-based TCP server wrapper for TradeSim.
 // It owns the listening socket, epoll instance and a periodic timer,
-// accepts clients, dispatches readable events to Client instances,
+// accepts clients, dispatches readable events to ClientSession instances,
 // and provides a simple broadcast facility for market data.
 
 #pragma once
@@ -11,13 +11,13 @@
 
 struct epoll_event;
 
-class Client;                // forward declaration (defined in Client.h)
-class MarketDataGenerator;   // forward declaration (defined in MarketDataGenerator.h)
+class ClientSession;                // forward declaration (defined in ClientSession.h)
+class MatchingEngine;        // forward declaration (defined in MatchingEngine.h)
 
 class TradeServer {
 public:
     // Construct without starting the loop. Call init() then run().
-    explicit TradeServer(uint16_t port = 8000);
+    explicit TradeServer(uint16_t port);
     ~TradeServer();
 
     // Create listen socket, epoll fd and timerfd.
@@ -32,9 +32,6 @@ public:
 
     // Helper to arm EPOLLOUT when there is pending data
     void notifyWritable(int fd);
-    
-    // Set market data generator used on timer ticks (server takes ownership).
-    void setMarketDataGenerator(std::unique_ptr<MarketDataGenerator> mdg);
 
 private:
 
@@ -54,8 +51,8 @@ private:
     bool running_{false};
 
     // All active clients, keyed by fd (value owns per-connection state).
-    std::unordered_map<int, std::unique_ptr<Client>> clients_;
+    std::unordered_map<int, std::unique_ptr<ClientSession>> clients_;
 
     // Market data generator for periodic broadcast.
-    std::unique_ptr<MarketDataGenerator> mdg_;
+    std::unique_ptr<MatchingEngine> engine_;
 };

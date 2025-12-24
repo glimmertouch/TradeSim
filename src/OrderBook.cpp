@@ -6,7 +6,7 @@ OrderBook::OrderBook(int fair_price, int max_volume) : mid_price_(fair_price), m
     rebuildAround();
 }
 
-OrderBook::OrderBook(int fair_price, int max_volume, const buildParams& params) 
+OrderBook::OrderBook(int fair_price, int max_volume, const build_params& params) 
             : mid_price_(fair_price), max_volume_(max_volume), params_(params) {
     rebuildAround();
 }
@@ -67,8 +67,74 @@ void OrderBook::rebuildAround() {
     }
 }
 
+OrderAck OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uint64_t>& trade_id,
+                                     const OrderInfo& order) {
+    OrderAck ack{
+        .status_code = 200,
+        .order_id = order_id,
+        .executions = {}
+    };
+
+    int price = order.price;
+    int quantity = order.quantity;
+    Side side = order.side;
+    std::string product = order.product;
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (side == Side::Buy) {
+        // Process buy IOC order
+        auto it = asks.begin();
+        while (it != asks.end() && quantity > 0 && it->first <= price) {
+            int trade_qty = std::min(quantity, it->second);
+            quantity -= trade_qty;
+            it->second -= trade_qty;
+
+            ack.executions.emplace_back(TradeExecution{
+                .trade_id = trade_id.fetch_add(1, std::memory_order_relaxed),
+                .buy_order_id = order_id,
+                .sell_order_id = 0, // Now for zero
+                .product = product,
+                .price = it->first,
+                .quantity = trade_qty,
+                .timestamp = 0 // Now for zero
+            });
+
+            if (it->second == 0) {
+                it = asks.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    } else if (side == Side::Sell) {
+        // Process sell IOC order
+        auto it = bids.begin();
+        while (it != bids.end() && quantity > 0 && it->first >= price) {
+            int trade_qty = std::min(quantity, it->second);
+            quantity -= trade_qty;
+            it->second -= trade_qty;
+
+            ack.executions.emplace_back(TradeExecution{
+                .trade_id = trade_id.fetch_add(1, std::memory_order_relaxed),
+                .buy_order_id = 0, // Now for zero
+                .sell_order_id = order_id,
+                .product = product,
+                .price = it->first,
+                .quantity = trade_qty,
+                .timestamp = 0 // Now for zero
+            });
+
+            if (it->second == 0) {
+                it = bids.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    
+    return ack;
+}
+
 std::int64_t OrderBook::getNextTickTime() {
-    // 修改为返回引用
     return next_tick_ms_;
 }
 

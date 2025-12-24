@@ -1,7 +1,8 @@
 #include "TradeServer.h"
 
-#include "Client.h"
-#include "MarketDataGenerator.h"
+#include "ClientSession.h"
+#include "MatchingEngine.h"
+#include <Database.h>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -14,13 +15,11 @@
 #include <iostream>
 
 
-TradeServer::TradeServer(uint16_t port) : port_(port) {}
+TradeServer::TradeServer(uint16_t port) : port_(port) {
+    engine_ = std::make_unique<MatchingEngine>();
+}
 
 TradeServer::~TradeServer() { stop(); }
-
-void TradeServer::setMarketDataGenerator(std::unique_ptr<MarketDataGenerator> mdg) {
-    mdg_ = std::move(mdg);
-}
 
 bool TradeServer::init() {
     epfd_ = epoll_create1(EPOLL_CLOEXEC);
@@ -148,7 +147,7 @@ void TradeServer::handleAccept() {
             std::perror("accept");
             break;
         }
-        auto cli = std::make_unique<Client>(cfd);
+        auto cli = std::make_unique<ClientSession>(cfd, engine_.get());
         // When client has new data to send, arm EPOLLOUT on its fd
         cli->setWritableNotifier([this](int fd){ this->notifyWritable(fd); });
         epoll_event ce{};
@@ -168,16 +167,17 @@ void TradeServer::handleTimer() {
     std::uint64_t ticks;
     while (read(timer_fd_, &ticks, sizeof(ticks)) > 0) {}
 
-    if (mdg_) {
-        std::string payload = mdg_->makeMarketData();
+    if (engine_) {
+        std::string payload = engine_->makeMarketData();
         broadcast(std::move(payload));
     }
+    
 }
 
 void TradeServer::handleReadable(int fd) {
     auto it = clients_.find(fd);
     if (it == clients_.end()) return;
-    Client* client = it->second.get();
+    ClientSession* client = it->second.get();
     char buf[4096];
     for (;;) {
         ssize_t r = read(fd, buf, sizeof(buf));
@@ -202,7 +202,7 @@ void TradeServer::handleReadable(int fd) {
 void TradeServer::handleWritable(int fd) {
     auto it = clients_.find(fd);
     if (it == clients_.end()) return;
-    Client* client = it->second.get();
+    ClientSession* client = it->second.get();
     // Ask client to flush its buffered data
     ssize_t sent = client->flushWriteBufferNonBlocking();
     (void)sent;

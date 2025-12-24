@@ -1,4 +1,4 @@
-#include "Client.h"
+#include "ClientSession.h"
 #include "MessageFactory.h"
 
 #include <nlohmann/json.hpp>
@@ -9,22 +9,22 @@
 
 using nlohmann::json;
 
-Client::Client(int fd_) : fd(fd_), read_buffer_(), write_buffer_() {
-    thread_ = std::thread(&Client::workProcess, this);
+ClientSession::ClientSession(int fd_, MatchingEngine* engine) : fd(fd_), read_buffer_(), write_buffer_(), engine_(engine) {
+    thread_ = std::thread(&ClientSession::workProcess, this);
 }
 
-Client::~Client() {
+ClientSession::~ClientSession() {
     message_queue_.close();
     if (thread_.joinable()) {
         thread_.join();
     }
 }
 
-void Client::appendToReadBuffer(std::string data) {
+void ClientSession::appendToReadBuffer(std::string data) {
     read_buffer_ += data;
 }
 
-void Client::appendToWriteBuffer(std::string data) {
+void ClientSession::appendToWriteBuffer(std::string data) {
     bool notify = false;
     {
         std::lock_guard<std::mutex> lock(write_mutex_);
@@ -36,7 +36,7 @@ void Client::appendToWriteBuffer(std::string data) {
     }
 }
 
-void Client::workProcess() {
+void ClientSession::workProcess() {
     std::unique_ptr<Message> msg;
     while (1) {
         if (!message_queue_.wait_and_pop(msg)) {
@@ -51,7 +51,7 @@ void Client::workProcess() {
     }
 } 
 
-bool Client::tryParseReadBuffer() {
+bool ClientSession::tryParseReadBuffer() {
     if (read_buffer_.empty()) return false;
     try {
         size_t i = 0;
@@ -78,7 +78,7 @@ bool Client::tryParseReadBuffer() {
     }
 }
 
-std::unique_ptr<Message> Client::createMessageFromJson(json j) {
+std::unique_ptr<Message> ClientSession::createMessageFromJson(json j) {
     if (!j.contains("action")) return nullptr;
 
     std::string action = j["action"];
@@ -87,7 +87,7 @@ std::unique_ptr<Message> Client::createMessageFromJson(json j) {
 
 #define X(msg_type, msg_str) \
 if (action == msg_str) { \
-msg = std::make_unique<msg_type##Message>(MessageType::msg_type, std::move(j)); \
+msg = std::make_unique<msg_type##Message>(MessageType::msg_type, this, std::move(j)); \
 }
 
 MESSAGE_TYPE_LIST
@@ -97,7 +97,7 @@ MESSAGE_TYPE_LIST
     return msg;
 }
 
-ssize_t Client::flushWriteBufferNonBlocking() {
+ssize_t ClientSession::flushWriteBufferNonBlocking() {
     std::lock_guard<std::mutex> lock(write_mutex_);
     ssize_t total = 0;
     while (!write_buffer_.empty()) {

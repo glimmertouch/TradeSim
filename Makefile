@@ -1,5 +1,6 @@
 CXX := ccache g++
 CXXFLAGS := -O2 -std=c++20 -Wall -Wextra -pthread -I./src
+LDLIBS := -lsqlite3 -lcrypto
 
 SRC_DIR := src
 SRCS := $(wildcard $(SRC_DIR)/*.cpp)
@@ -18,7 +19,7 @@ build/%.o: $(SRC_DIR)/%.cpp | build
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(BIN): $(OBJS) | build
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
 clean:
 	rm -rf build

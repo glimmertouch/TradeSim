@@ -5,8 +5,11 @@
 
 using nlohmann::json;
 
+class ClientSession;
+
 #define MESSAGE_TYPE_LIST \
-    X(Login, "login")
+    X(Login, "login") \
+    X(Submit, "submit") \
 
 enum class MessageType {
 #define X(type, str) type,
@@ -33,6 +36,8 @@ public:
     }
 protected:
     int status_code_;
+    bool is_valid_;
     json data_;
-    Message(MessageType type_) : type_(type_), status_code_(0) {}
+    ClientSession* session_;
+    Message(MessageType type_, ClientSession* session) : type_(type_), status_code_(0), session_(session) {}
 };

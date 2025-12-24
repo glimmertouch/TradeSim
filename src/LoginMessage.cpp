@@ -1,21 +1,26 @@
 #include "LoginMessage.h"
+#include "Database.h"
+#include "ClientSession.h"
 
-
-LoginMessage::LoginMessage(MessageType type_, json j) : Message(type_) {
-    if (j.contains("username")) {
+LoginMessage::LoginMessage(MessageType type_, ClientSession* session, json j) 
+    : Message(type_, session) {
+    is_valid_ = j.contains("username") && j.contains("password");
+    if (is_valid_) {
         username = j["username"].get<std::string>();
-    }
-    if (j.contains("password")) {
         password = j["password"].get<std::string>();
     }
 }
 
 const json& LoginMessage::handle() {
-    if (username.empty() || password.empty()) {
-        status_code_ = 403;
-    } else {
-        // For demonstration, accept any non-empty username/password
-        status_code_ = 200;
+    auto& db = Database::instance();
+
+    status_code_ = 403;
+    if (is_valid_) {
+        int user_id = db.verifyUser(username, password).value_or(-1);
+        if (user_id != -1) {
+            status_code_ = 200;
+            session_->setUserId(user_id);
+        }
     }
     toJson();
     return data_;

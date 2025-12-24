@@ -54,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         {"action": "login", "username": "", "password": "pass"},
         {"action": "login", "username": "user", "password": ""},
         {"action": "login", "username": "alice", "password": "secret"},
+        {"action": "login", "username": "hello", "password": "world"},
     ]
 
     try:
@@ -78,8 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                     continue
 
                 # 登录回复在服务器端以 "action":"login" 返回，status 存储状态码
-                print(json.dumps(obj, ensure_ascii=False))
-                """
+                
                 if isinstance(obj, dict) and obj.get("action") == "login":
                     print(json.dumps(obj, ensure_ascii=False))
                     got += 1
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
                 elif isinstance(obj, dict) and ("status" in obj) and ("msg" in obj or "error" in obj):
                     print(json.dumps(obj, ensure_ascii=False))
                     got += 1
-                """
+                
 
             return 0
     except Exception as e:
