@@ -116,18 +116,24 @@ def render_frame(snapshot: Dict[str, Any]) -> None:
         print()
 
 
-def run(host: str, port: int, frames: int) -> int:
+def run(host: str, port: int, frames: int, interval: float) -> int:
     try:
         with socket.create_connection((host, port)) as sock:
             count = 0
+            frame_count = 0
             for obj in decode_stream(sock):
                 # Validate action/event
                 if obj.get("action") != "market_data":
                     continue
-                render_frame(obj)
-                count += 1
-                if frames > 0 and count >= frames:
-                    break
+                # 只每隔4帧渲染一次
+                if frame_count % 4 == 0:
+                    render_frame(obj)
+                    count += 1
+                    if frames > 0 and count >= frames:
+                        break
+                    if interval > 0:
+                        time.sleep(interval)
+                frame_count += 1
         return 0
     except KeyboardInterrupt:
         return 130
@@ -141,8 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--frames", type=int, default=0, help="exit after N frames (0=infinite)")
+    ap.add_argument("--interval", type=float, default=1.0, help="seconds between renders (default 1.0)")
     args = ap.parse_args(argv)
-    return run(args.host, args.port, args.frames)
+    return run(args.host, args.port, args.frames, args.interval)
 
 
 if __name__ == "__main__":

@@ -14,10 +14,25 @@ enum class Side {
 };
 
 struct OrderInfo {
+    std::uint64_t order_id;
+    std::string order_type;
     std::string product;
     int price;
     int quantity;
     Side side;
+    json tojson(bool status) const {
+        json j;
+        j["status"] = status ? "success" : "failure";
+        j["orderid"] = order_id;
+        j["product"] = product;
+        j["price"] = price;
+        j["quantity"] = quantity;
+        j["ordertype"] = order_type;
+        j["side"] = (side == Side::Buy) ? "Buy" : "Sell";
+        j["fee_charged"] = 1;
+        return j;
+    }
+
 };
 
 struct TradeExecution {
@@ -28,12 +43,6 @@ struct TradeExecution {
     int price;
     int quantity;
     std::int64_t timestamp; // unix time in milliseconds
-};
-
-struct OrderAck {
-    int status_code;
-    std::uint64_t order_id;
-    std::vector<TradeExecution> executions;
 };
 
 class OrderBook {
@@ -65,7 +74,7 @@ public:
     json getTop5OfBook() const;
     void rebuildAround();
 
-    OrderAck processIocOrder(std::uint64_t order_id, std::atomic<std::uint64_t>& trade_id, const OrderInfo& order);
+    std::vector<TradeExecution> processIocOrder(std::uint64_t order_id, std::atomic<std::uint64_t>& trade_id, const OrderInfo& order);
     
     std::int64_t getNextTickTime();
     void setNextTickTime(std::int64_t now_ms_);

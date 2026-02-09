@@ -14,7 +14,7 @@ SubmitMessage::SubmitMessage(MessageType type_, ClientSession* session, json j)
         order_.product = j["data"]["product"].get<std::string>();
         order_.price = j["data"]["price"].get<int>();
         order_.quantity = j["data"]["quantity"].get<int>();
-        order_type_ = j["ordertype"].get<std::string>();
+        order_.order_type = j["ordertype"].get<std::string>();
         std::string side = j["side"].get<std::string>();
         if (side == "buy") {
             order_.side = Side::Buy;
@@ -47,9 +47,7 @@ const json& SubmitMessage::handle() {
         return data_;
     }
 
-    OrderAck res = engine->submitIocOrder(std::move(order_));
-    status_code_ = res.status_code;
-    executions_ = std::move(res.executions);
+    std::tie(status_code_, order_.order_id) = engine->submitIocOrder(std::move(order_), session_);
 
     toJson();
     return data_;
@@ -72,4 +70,5 @@ void SubmitMessage::toJson() {
             data_["error"] = "Unknown status";
             break;
     }
+    data_["response"] = order_.tojson(status_code_ == 200);
 }

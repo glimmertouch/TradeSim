@@ -67,13 +67,9 @@ void OrderBook::rebuildAround() {
     }
 }
 
-OrderAck OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uint64_t>& trade_id,
-                                     const OrderInfo& order) {
-    OrderAck ack{
-        .status_code = 200,
-        .order_id = order_id,
-        .executions = {}
-    };
+std::vector<TradeExecution> OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uint64_t>& trade_id,
+                                                     const OrderInfo& order) {
+    std::vector<TradeExecution> executions;
 
     int price = order.price;
     int quantity = order.quantity;
@@ -89,15 +85,17 @@ OrderAck OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uin
             quantity -= trade_qty;
             it->second -= trade_qty;
 
-            ack.executions.emplace_back(TradeExecution{
+            TradeExecution te{
                 .trade_id = trade_id.fetch_add(1, std::memory_order_relaxed),
                 .buy_order_id = order_id,
-                .sell_order_id = 0, // Now for zero
+                .sell_order_id = 0,
                 .product = product,
                 .price = it->first,
                 .quantity = trade_qty,
-                .timestamp = 0 // Now for zero
-            });
+                .timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            executions.emplace_back(std::move(te));
 
             if (it->second == 0) {
                 it = asks.erase(it);
@@ -113,15 +111,17 @@ OrderAck OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uin
             quantity -= trade_qty;
             it->second -= trade_qty;
 
-            ack.executions.emplace_back(TradeExecution{
+            TradeExecution te{
                 .trade_id = trade_id.fetch_add(1, std::memory_order_relaxed),
-                .buy_order_id = 0, // Now for zero
+                .buy_order_id = 0,
                 .sell_order_id = order_id,
                 .product = product,
                 .price = it->first,
                 .quantity = trade_qty,
-                .timestamp = 0 // Now for zero
-            });
+                .timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            executions.emplace_back(std::move(te));
 
             if (it->second == 0) {
                 it = bids.erase(it);
@@ -130,8 +130,8 @@ OrderAck OrderBook::processIocOrder(std::uint64_t order_id, std::atomic<std::uin
             }
         }
     }
-    
-    return ack;
+
+    return executions;
 }
 
 std::int64_t OrderBook::getNextTickTime() {
